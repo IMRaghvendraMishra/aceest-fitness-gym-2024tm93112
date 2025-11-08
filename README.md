@@ -1,7 +1,9 @@
-# Aceest Fitness Gym 2024 (TM93112)
+# Aceest Fitness Gym 2025 (TM93112)
 
 ## Description
-Aceest Fitness Gym 2024 is a Flask-based web application designed to help users track workouts, manage gym memberships, and analyze fitness progress. This project provides a robust backend with RESTful APIs and supports containerized deployment and automated testing.
+Aceest Fitness Gym 2025 is a Flask-based web application designed to help users track workouts, manage gym memberships, 
+and analyze fitness progress. This project provides a robust backend with RESTful APIs and supports containerized 
+deployment and automated testing.
 
 ## Local Setup
 Follow these steps to set up the project locally:
