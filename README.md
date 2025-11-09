@@ -53,3 +53,11 @@ This project uses GitHub Actions for CI/CD. The workflow performs the following 
 3. **Build Docker image:** Builds the Docker image to verify containerization works as expected.
 
 All steps are automated and triggered on push and pull request events to the main branch.
+
+Local Run of CI/CD Workflow:
+rm -rf venv
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python src/ACEest_Fitness.py
