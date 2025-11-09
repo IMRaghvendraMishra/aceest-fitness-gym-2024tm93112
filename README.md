@@ -1,7 +1,9 @@
-# Aceest Fitness Gym 2024 (TM93112)
+# Aceest Fitness Gym 2025 (TM93112)
 
 ## Description
-Aceest Fitness Gym 2024 is a Flask-based web application designed to help users track workouts, manage gym memberships, and analyze fitness progress. This project provides a robust backend with RESTful APIs and supports containerized deployment and automated testing.
+Aceest Fitness Gym 2025 is a Flask-based web application designed to help users track workouts, manage gym memberships, 
+and analyze fitness progress. This project provides a robust backend with RESTful APIs and supports containerized 
+deployment and automated testing.
 
 ## Local Setup
 Follow these steps to set up the project locally:
@@ -51,3 +53,11 @@ This project uses GitHub Actions for CI/CD. The workflow performs the following 
 3. **Build Docker image:** Builds the Docker image to verify containerization works as expected.
 
 All steps are automated and triggered on push and pull request events to the main branch.
+
+Local Run of CI/CD Workflow:
+rm -rf venv
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python src/ACEest_Fitness.py
