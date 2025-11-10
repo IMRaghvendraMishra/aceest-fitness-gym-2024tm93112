@@ -6,7 +6,7 @@ from datetime import datetime
 # Import the class under test
 from app.versions.ACEest_Fitness_V1_1 import FitnessTrackerApp
 
-class TestFitnessTrackerApp(unittest.TestCase):
+class TestFitnessTrackerAppV11(unittest.TestCase):
     def setUp(self):
         """Prepare a hidden root window before each test."""
         self.root = tk.Tk()

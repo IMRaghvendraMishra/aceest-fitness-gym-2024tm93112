@@ -5,7 +5,7 @@ import tkinter as tk
 from app.versions.ACEest_Fitness_V1_2 import FitnessTrackerApp
 
 
-class TestFitnessTrackerApp(unittest.TestCase):
+class TestFitnessTrackerAppV12(unittest.TestCase):
 
     def setUp(self):
         """Set up a mock Tkinter root for each test."""
