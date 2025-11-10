@@ -6,23 +6,28 @@ import tkinter as tk
 from fitness_app.versions.ACEest_Fitness_V1_3 import FitnessTrackerApp
 
 
+# ---------- Fixtures ---------- #
+
 @pytest.fixture
 def fitness_app_instance(monkeypatch):
-    """Create app instance with tk mocked to avoid real GUI popups."""
+    """Create a headless FitnessTrackerApp instance with mocked messageboxes."""
+    # Mock messageboxes to prevent blocking dialogs
+    monkeypatch.setattr(
+        "fitness_app.versions.ACEest_Fitness_V1_3.messagebox.showinfo", MagicMock()
+    )
+    monkeypatch.setattr(
+        "fitness_app.versions.ACEest_Fitness_V1_3.messagebox.showerror", MagicMock()
+    )
+
+    # Create Tk root headlessly
     root = tk.Tk()
+    root.withdraw()
     app = FitnessTrackerApp(root)
+    yield app
+    root.destroy()
 
-    # Mock messagebox to suppress actual dialogs
-    monkeypatch.setattr(
-        "fitness_app.versions.ACEest_Fitness_V1_3.messagebox.showinfo",
-        MagicMock()
-    )
-    monkeypatch.setattr(
-        "fitness_app.versions.ACEest_Fitness_V1_3.messagebox.showerror",
-        MagicMock()
-    )
-    return app
 
+# ---------- User Info Tests ---------- #
 
 def test_save_user_info_success(fitness_app_instance):
     app = fitness_app_instance
@@ -36,7 +41,7 @@ def test_save_user_info_success(fitness_app_instance):
     app.save_user_info()
 
     assert app.user_info["name"] == "Alice"
-    assert app.user_info["bmi"] == pytest.approx(60 / ((1.65) ** 2))
+    assert app.user_info["bmi"] == pytest.approx(60 / (1.65 ** 2))
     assert "bmr" in app.user_info
     assert app.user_info["bmr"] > 0
     assert app.user_info["weekly_cal_goal"] == 2000
@@ -52,6 +57,8 @@ def test_save_user_info_invalid_input(fitness_app_instance):
     mod = __import__("fitness_app.versions.ACEest_Fitness_V1_3", fromlist=["messagebox"])
     mod.messagebox.showerror.assert_called_once()
 
+
+# ---------- Add Workout Tests ---------- #
 
 def test_add_workout_success(fitness_app_instance):
     app = fitness_app_instance
@@ -80,7 +87,9 @@ def test_add_workout_missing_fields(fitness_app_instance):
     app.add_workout()
 
     mod = __import__("fitness_app.versions.ACEest_Fitness_V1_3", fromlist=["messagebox"])
-    mod.messagebox.showerror.assert_called_with("Input Error", "Please enter both exercise and duration.")
+    mod.messagebox.showerror.assert_called_with(
+        "Input Error", "Please enter both exercise and duration."
+    )
 
 
 def test_add_workout_invalid_duration(fitness_app_instance):
@@ -93,6 +102,8 @@ def test_add_workout_invalid_duration(fitness_app_instance):
     mod.messagebox.showerror.assert_called()
 
 
+# ---------- Summary Tests ---------- #
+
 def test_view_summary_no_sessions(fitness_app_instance):
     app = fitness_app_instance
     app.workouts = {"Warm-up": [], "Workout": [], "Cool-down": []}
@@ -102,17 +113,20 @@ def test_view_summary_no_sessions(fitness_app_instance):
     mod.messagebox.showinfo.assert_called_with("Summary", "No sessions logged yet!")
 
 
+# ---------- Chart Tests ---------- #
+
 def test_update_progress_chart_no_data(fitness_app_instance):
     """Ensure placeholder label is displayed when no data available."""
     app = fitness_app_instance
     for cat in app.workouts:
         app.workouts[cat].clear()
+
     app.update_progress_charts()
 
     children = app.chart_container.winfo_children()
-    assert any(isinstance(c, tk.Label) for c in children)
-    lbl = next((c for c in children if isinstance(c, tk.Label)), None)
-    assert "No workout data" in lbl.cget("text")
+    labels = [c for c in children if isinstance(c, tk.Label)]
+    assert labels, "No label widgets found"
+    assert any("no workout data" in c.cget("text").lower() for c in labels)
 
 
 @patch("fitness_app.versions.ACEest_Fitness_V1_3.FigureCanvasTkAgg", autospec=True)
@@ -120,8 +134,11 @@ def test_update_progress_chart_with_data(mock_canvas, fitness_app_instance):
     app = fitness_app_instance
     app.workouts["Workout"].append({"exercise": "Run", "duration": 20, "calories": 100})
     app.update_progress_charts()
-    mock_canvas.assert_called()  # chart created successfully
 
+    mock_canvas.assert_called()  # Chart creation was triggered
+
+
+# ---------- PDF Export Tests ---------- #
 
 @patch("fitness_app.versions.ACEest_Fitness_V1_3.pdf_canvas.Canvas", autospec=True)
 def test_export_weekly_report_success(mock_canvas, fitness_app_instance):

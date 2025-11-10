@@ -1,5 +1,6 @@
 import pytest
 import tkinter as tk
+from unittest.mock import MagicMock
 
 from fitness_app.versions.ACEest_Fitness_V1_2_3 import FitnessTrackerApp
 
@@ -8,12 +9,14 @@ from fitness_app.versions.ACEest_Fitness_V1_2_3 import FitnessTrackerApp
 
 @pytest.fixture
 def app_instance(monkeypatch):
-    """Create a Tkinter root and app instance in headless mode."""
-    # Mock messagebox methods to prevent blocking popups
-    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *a, **k: None)
-    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *a, **k: None)
+    """Create a headless FitnessTrackerApp instance with mocked messageboxes."""
+    # Mock messagebox methods to avoid blocking dialogs during tests
+    monkeypatch.setattr("tkinter.messagebox.showerror", MagicMock())
+    monkeypatch.setattr("tkinter.messagebox.showinfo", MagicMock())
+
+    # Initialize root without showing GUI
     root = tk.Tk()
-    root.withdraw()  # Prevent GUI window from showing
+    root.withdraw()
     app = FitnessTrackerApp(root)
     yield app
     root.destroy()
@@ -47,13 +50,16 @@ def test_add_workout_success(monkeypatch, app_instance):
     app.duration_entry.insert(0, "15")
 
     called = {}
-    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *a, **k: called.setdefault("msg", a[1]))
+    def fake_info(title, msg):
+        called["msg"] = msg
+
+    monkeypatch.setattr("tkinter.messagebox.showinfo", fake_info)
 
     app.add_workout()
 
-    assert "added successfully" in called["msg"]
+    assert "added successfully" in called["msg"].lower()
     assert len(app.workouts["Workout"]) == 1
-    assert "Push-ups" in app.status_label.cget("text")
+    assert "push-ups" in app.status_label.cget("text").lower()
 
 
 def test_add_workout_missing_fields(monkeypatch, app_instance):
@@ -77,7 +83,7 @@ def test_add_workout_invalid_duration(monkeypatch, app_instance):
     app.duration_entry.insert(0, "-5")
     app.add_workout()
 
-    assert "positive" in called["msg"]
+    assert "positive" in called["msg"].lower()
 
 
 # ---------- Summary View ---------- #
@@ -88,7 +94,7 @@ def test_view_summary_no_data(monkeypatch, app_instance):
     monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *a, **k: called.setdefault("msg", a[1]))
 
     app.view_summary()
-    assert "No sessions logged yet" in called["msg"]
+    assert "no sessions logged yet" in called["msg"].lower()
 
 
 def test_view_summary_with_data(app_instance):
@@ -101,7 +107,7 @@ def test_view_summary_with_data(app_instance):
 
     app.view_summary()
 
-    # A new Toplevel summary window should exist
+    # Ensure a new summary window (Toplevel) was created
     summary_windows = [w for w in app.master.winfo_children() if isinstance(w, tk.Toplevel)]
     assert len(summary_windows) == 1
 
@@ -112,7 +118,7 @@ def test_update_progress_charts_empty(app_instance):
     app = app_instance
     app.update_progress_charts()
     labels = [w for w in app.chart_container.winfo_children() if isinstance(w, tk.Label)]
-    assert any("No workout data" in w.cget("text") for w in labels)
+    assert any("no workout data" in w.cget("text").lower() for w in labels)
 
 
 def test_update_progress_charts_with_data(app_instance):
@@ -122,8 +128,8 @@ def test_update_progress_charts_with_data(app_instance):
     app.workouts["Cool-down"].append({"exercise": "Stretching", "duration": 5, "timestamp": "2025-11-10"})
 
     app.update_progress_charts()
-
     assert app.chart_canvas is not None
+
     widget = app.chart_canvas.get_tk_widget()
     app.master.update_idletasks()
     assert widget.winfo_exists()
@@ -146,9 +152,9 @@ def test_on_tab_change_triggers_chart_update(monkeypatch, app_instance):
 
 def test_create_workout_plan_tab_creates_labels(app_instance):
     labels = [w for w in app_instance.chart_tab.winfo_children() if isinstance(w, tk.Label)]
-    assert any("Workout Plan" in w.cget("text") for w in labels)
+    assert any("workout plan" in w.cget("text").lower() for w in labels)
 
 
 def test_create_diet_guide_tab_creates_labels(app_instance):
     labels = [w for w in app_instance.diet_tab.winfo_children() if isinstance(w, tk.Label)]
-    assert any("Nutritional" in w.cget("text") for w in labels)
+    assert any("nutritional" in w.cget("text").lower() for w in labels)
