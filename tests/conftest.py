@@ -1,38 +1,51 @@
 # tests/conftest.py
-import os
-import sys
 import pytest
 import tkinter as tk
-from unittest.mock import MagicMock
-
-# --- Ensure the project root is importable ---
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-# ---------------------------------------------
+import importlib
 
 @pytest.fixture
-def fitness_app(monkeypatch):
-    """Create a FitnessTrackerApp instance safely for both GUI and CI (headless)."""
-    from fitness_app.ACEest_Fitness import FitnessTrackerApp
+def fitness_app(monkeypatch, request):
+    """
+    Create a FitnessTrackerApp instance for any ACEest_Fitness module version.
+    Works in headless CI (no DISPLAY) and auto-imports correct module per test file.
+    """
 
-    # ✅ If no display (e.g., GitHub Actions), mock the entire Tk root
-    if os.environ.get("DISPLAY", "") == "":
-        root = MagicMock(name="MockTkRoot")
-        # Also mock child widget methods often used in tests
-        root.destroy = MagicMock()
-    else:
+    # --- Step 1: Create safe Tk root (handles GitHub CI with no display)
+    try:
         root = tk.Tk()
         root.withdraw()
+    except tk.TclError:
+        class DummyTk:
+            def withdraw(self): pass
+            def destroy(self): pass
+        root = DummyTk()
 
-    # Mock all tkinter popups to avoid UI calls
-    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *a, **k: None)
-    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *a, **k: None)
-    monkeypatch.setattr("tkinter.simpledialog.askstring", lambda *a, **k: "mock_input")
+    # --- Step 2: Auto-detect correct ACEest_Fitness module from test path
+    test_path = request.fspath.strpath  # e.g. "tests/versions/test_ACEest_Fitness_V1_2_3.py"
+    module_name = "ACEest_Fitness"
+    if "versions" in test_path:
+        # Extract version part dynamically
+        import re
+        match = re.search(r"ACEest_Fitness(?:_V[\d_]+)?", test_path)
+        if match:
+            module_name = match.group(0)
+        module_name = f"versions.{module_name}" if not module_name.startswith("ACEest_Fitness") else module_name
 
-    app = FitnessTrackerApp(root)
+    # --- Step 3: Dynamically import correct version
+    module = importlib.import_module(module_name)
+    app_class = getattr(module, "FitnessTrackerApp")
+
+    app = app_class(root)
+
+    # --- Step 4: Mock messagebox dialogs for test automation
+    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *a, **kw: None)
+    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *a, **kw: None)
+    monkeypatch.setattr("tkinter.messagebox.askyesno", lambda *a, **kw: True)
+
     yield app
 
-    # Safely destroy real Tk roots
-    if hasattr(root, "destroy"):
+    # --- Step 5: Cleanup root (real or dummy)
+    try:
         root.destroy()
+    except Exception:
+        pass
