@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 import tkinter as tk
-from app.ACEest_Fitness import FitnessTrackerApp
+from fitness_app.ACEest_Fitness import FitnessTrackerApp
 
 
 class TestFitnessTrackerApp(unittest.TestCase):

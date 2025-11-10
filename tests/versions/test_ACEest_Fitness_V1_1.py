@@ -4,7 +4,7 @@ import tkinter as tk
 from datetime import datetime
 
 # Import the class under test
-from app.versions.ACEest_Fitness_V1_1 import FitnessTrackerApp
+from fitness_app.versions.ACEest_Fitness_V1_1 import FitnessTrackerApp
 
 class TestFitnessTrackerAppV11(unittest.TestCase):
     def setUp(self):

@@ -1,7 +1,7 @@
 import pytest
 import tkinter as tk
 from unittest import mock
-from app.versions.ACEest_Fitness_V1_2_1 import FitnessTrackerApp
+from fitness_app.versions.ACEest_Fitness_V1_2_1 import FitnessTrackerApp
 
 
 @pytest.fixture
