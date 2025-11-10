@@ -1,30 +1,28 @@
 # tests/conftest.py
+import os
 import pytest
-from unittest.mock import MagicMock, patch
+import tkinter as tk
+from unittest.mock import MagicMock
 
-import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+@pytest.fixture
+def fitness_app(monkeypatch):
+    """Create a FitnessTrackerApp instance safely for both GUI and CI (headless)."""
+    from fitness_app.ACEest_Fitness import FitnessTrackerApp
 
-# --- MOCK Tkinter for headless CI environments (no DISPLAY) ---
-@pytest.fixture(scope="function")
-def mock_tkinter_for_ci(monkeypatch):
-    """
-    Automatically mock Tkinter root window and dialogs when running in CI (no GUI).
-    This prevents TclError: no display name and no $DISPLAY environment variable.
-    """
-
-    try:
-        import tkinter as tk
-        # Try creating a real root — only works locally with a display
+    # Headless environment: simulate Tkinter root
+    if os.environ.get("DISPLAY", "") == "":
+        root = MagicMock(name="MockTkRoot")
+    else:
         root = tk.Tk()
-        root.withdraw()
+
+    # Mock common dialog functions so no popups appear
+    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *a, **k: None)
+    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *a, **k: None)
+    monkeypatch.setattr("tkinter.simpledialog.askstring", lambda *a, **k: "mock_input")
+
+    app = FitnessTrackerApp(root)
+    yield app
+
+    # Cleanup (if real Tk)
+    if hasattr(root, "destroy"):
         root.destroy()
-    except Exception:
-        # In GitHub Actions or other headless environments: mock everything
-        monkeypatch.setattr("tkinter.Tk", MagicMock(name="MockTk"))
-        monkeypatch.setattr("tkinter.Toplevel", MagicMock(name="MockToplevel"))
-        monkeypatch.setattr("tkinter.messagebox.showinfo", MagicMock())
-        monkeypatch.setattr("tkinter.messagebox.showerror", MagicMock())
-        monkeypatch.setattr("tkinter.messagebox.askyesno", MagicMock(return_value=True))
-        monkeypatch.setattr("tkinter.simpledialog.askstring", MagicMock(return_value="mocked_input"))
-        monkeypatch.setattr("tkinter.filedialog.askopenfilename", MagicMock(return_value="mocked_file.txt"))
