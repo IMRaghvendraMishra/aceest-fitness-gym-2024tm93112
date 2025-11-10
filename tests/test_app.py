@@ -1,4 +1,4 @@
-from app.app import app
+from fitness_app.app import app
 
 
 def test_home():
