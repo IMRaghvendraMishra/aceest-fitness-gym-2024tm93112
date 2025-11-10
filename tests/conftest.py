@@ -6,18 +6,22 @@ import importlib
 import re
 
 # --- GLOBAL FIX ---
-# Prevent TclError: no display name and no $DISPLAY environment variable
-# by mocking tk.Tk() when no display is available.
+# Prevent TclError and "no default root" issues in headless CI
 try:
-    _ = tk.Tk()
-    _.withdraw()
-    _.destroy()
+    # Try creating a real hidden Tk root (works locally)
+    _root = tk.Tk()
+    _root.withdraw()
+    tk._default_root = _root
+    _root.destroy()
 except tk.TclError:
+    # Headless CI: use dummy Tk root
     class DummyTk:
         def withdraw(self): pass
         def destroy(self): pass
         def __getattr__(self, name): return MagicMock()
-    tk.Tk = DummyTk  # ✅ Mock globally before any test imports run
+    dummy_root = DummyTk()
+    tk.Tk = lambda *a, **kw: dummy_root
+    tk._default_root = dummy_root   # ✅ ensures StringVar() etc. don’t fail
 
 
 @pytest.fixture
