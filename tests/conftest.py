@@ -2,6 +2,9 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 # --- MOCK Tkinter for headless CI environments (no DISPLAY) ---
 @pytest.fixture(scope="function")
 def mock_tkinter_for_ci(monkeypatch):
