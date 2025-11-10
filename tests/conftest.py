@@ -5,25 +5,36 @@ from unittest.mock import MagicMock
 import importlib
 import re
 
-# --- GLOBAL FIX ---
-# Prevent TclError and "no default root" issues in headless CI
+# ============================================================
+# ✅ GLOBAL FIX (final version)
+# Prevent TclError, no-display crashes, StringVar errors,
+# and infinite mainloop hangs in GitHub Actions (headless CI).
+# ============================================================
 try:
-    # Try creating a real hidden Tk root (works locally)
-    _root = tk.Tk()
-    _root.withdraw()
-    tk._default_root = _root
-    _root.destroy()
+    real_root = tk.Tk()
+    real_root.withdraw()
+    tk._default_root = real_root
+    real_root.destroy()
 except tk.TclError:
-    # Headless CI: use dummy Tk root
     class DummyTk:
         def withdraw(self): pass
         def destroy(self): pass
-        def __getattr__(self, name): return MagicMock()
+        def mainloop(self): pass          # prevent blocking in CI
+        def after(self, *a, **kw): pass   # prevent async loops
+        def update(self): pass
+        def title(self, *a, **kw): pass
+        def geometry(self, *a, **kw): pass
+        def __getattr__(self, name):
+            return MagicMock()
+
     dummy_root = DummyTk()
-    tk.Tk = lambda *a, **kw: dummy_root
-    tk._default_root = dummy_root   # ✅ ensures StringVar() etc. don’t fail
+    tk.Tk = lambda *a, **kw: dummy_root   # safely override Tk()
+    tk._default_root = dummy_root         # required for StringVar, IntVar
 
 
+# ====================================================================
+# ✅ Your ORIGINAL FIXTURE (keep unchanged)
+# ====================================================================
 @pytest.fixture
 def fitness_app(monkeypatch, request):
     """
@@ -36,7 +47,7 @@ def fitness_app(monkeypatch, request):
         root = tk.Tk()
         root.withdraw()
     except Exception:
-        root = tk.Tk()  # now always DummyTk in headless mode
+        root = tk.Tk()
 
     # Step 2: Auto-detect correct ACEest_Fitness version
     test_path = request.fspath.strpath
