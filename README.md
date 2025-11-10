@@ -24,7 +24,7 @@ Follow these steps to set up the project locally:
    ```
 4. **Run the Flask app:**
    ```bash
-   python src/app.py
+   python src/ACEest_Fitness.py
    ```
 
 ## Running Tests
