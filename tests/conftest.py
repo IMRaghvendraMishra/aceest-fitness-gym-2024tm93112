@@ -1,50 +1,60 @@
 # tests/conftest.py
 import pytest
 import tkinter as tk
+from unittest.mock import MagicMock
 import importlib
+import re
+
+# --- GLOBAL FIX ---
+# Prevent TclError: no display name and no $DISPLAY environment variable
+# by mocking tk.Tk() when no display is available.
+try:
+    _ = tk.Tk()
+    _.withdraw()
+    _.destroy()
+except tk.TclError:
+    class DummyTk:
+        def withdraw(self): pass
+        def destroy(self): pass
+        def __getattr__(self, name): return MagicMock()
+    tk.Tk = DummyTk  # ✅ Mock globally before any test imports run
+
 
 @pytest.fixture
 def fitness_app(monkeypatch, request):
     """
-    Create a FitnessTrackerApp instance for any ACEest_Fitness module version.
-    Works in headless CI (no DISPLAY) and auto-imports correct module per test file.
+    Create a version-agnostic FitnessTrackerApp instance
+    that runs safely in both GUI and headless (CI) environments.
     """
 
-    # --- Step 1: Create safe Tk root (handles GitHub CI with no display)
+    # Step 1: Create root safely
     try:
         root = tk.Tk()
         root.withdraw()
-    except tk.TclError:
-        class DummyTk:
-            def withdraw(self): pass
-            def destroy(self): pass
-        root = DummyTk()
+    except Exception:
+        root = tk.Tk()  # now always DummyTk in headless mode
 
-    # --- Step 2: Auto-detect correct ACEest_Fitness module from test path
-    test_path = request.fspath.strpath  # e.g. "tests/versions/test_ACEest_Fitness_V1_2_3.py"
+    # Step 2: Auto-detect correct ACEest_Fitness version
+    test_path = request.fspath.strpath
     module_name = "ACEest_Fitness"
-    if "versions" in test_path:
-        # Extract version part dynamically
-        import re
-        match = re.search(r"ACEest_Fitness(?:_V[\d_]+)?", test_path)
-        if match:
-            module_name = match.group(0)
-        module_name = f"versions.{module_name}" if not module_name.startswith("ACEest_Fitness") else module_name
+    match = re.search(r"ACEest_Fitness(?:_V[\d_]+)?", test_path)
+    if match:
+        version_module = match.group(0)
+        if "versions" in test_path:
+            module_name = f"versions.{version_module}"
 
-    # --- Step 3: Dynamically import correct version
     module = importlib.import_module(module_name)
     app_class = getattr(module, "FitnessTrackerApp")
 
-    app = app_class(root)
+    # Step 3: Mock dialogs
+    monkeypatch.setattr("tkinter.messagebox.showinfo", MagicMock())
+    monkeypatch.setattr("tkinter.messagebox.showerror", MagicMock())
+    monkeypatch.setattr("tkinter.messagebox.askyesno", MagicMock(return_value=True))
 
-    # --- Step 4: Mock messagebox dialogs for test automation
-    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *a, **kw: None)
-    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *a, **kw: None)
-    monkeypatch.setattr("tkinter.messagebox.askyesno", lambda *a, **kw: True)
+    app = app_class(root)
 
     yield app
 
-    # --- Step 5: Cleanup root (real or dummy)
     try:
         root.destroy()
     except Exception:
