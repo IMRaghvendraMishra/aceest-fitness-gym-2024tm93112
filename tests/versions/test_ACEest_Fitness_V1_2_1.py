@@ -6,13 +6,23 @@ from fitness_app.versions.ACEest_Fitness_V1_2_1 import FitnessTrackerApp
 
 @pytest.fixture
 def fitness_app(monkeypatch):
-    """Create a FitnessTrackerApp instance with mocked messageboxes."""
+    """Create a FitnessTrackerApp instance with real Tk root but mocked dialogs."""
     root = tk.Tk()
-    monkeypatch.setattr("tkinter.messagebox.showinfo", MagicMock())
-    monkeypatch.setattr("tkinter.messagebox.showerror", MagicMock())
+    root.withdraw()  # Hide the main window (headless mode)
+
+    # Mock messageboxes to prevent actual pop-ups
+    mock_showinfo = MagicMock()
+    mock_showerror = MagicMock()
+    monkeypatch.setattr("tkinter.messagebox.showinfo", mock_showinfo)
+    monkeypatch.setattr("tkinter.messagebox.showerror", mock_showerror)
+
     app = FitnessTrackerApp(root)
     yield app
-    root.destroy()
+
+    try:
+        root.destroy()
+    except Exception:
+        pass
 
 
 def test_initial_state(fitness_app):
@@ -88,7 +98,7 @@ def test_update_progress_charts_creates_canvas(fitness_app):
     assert fitness_app.progress_canvas is not None
     widget = fitness_app.progress_canvas.get_tk_widget()
     assert widget is not None
-    assert str(widget) != ""   # Ensure widget has a valid Tk id
+    assert str(widget) != ""  # Ensure widget has a valid Tk id
 
 
 def test_update_progress_charts_handles_empty_data(fitness_app):
