@@ -1,9 +1,10 @@
 """
 Common pytest configuration and fixtures for the ACEest Fitness project.
 
-This setup ensures:
-1. Tkinter runs safely in both local (GUI) and CI (headless) environments.
-2. FitnessTrackerApp can be instantiated in tests without GUI popups or crashes.
+Ensures:
+1. Tkinter works safely in both local and CI environments.
+2. No GUI popups interrupt tests.
+3. FitnessTrackerApp can be loaded regardless of version folder structure.
 """
 
 import pytest
@@ -14,7 +15,7 @@ import re
 
 
 # ---------------------------------------------------------------------------
-# GLOBAL FIX: make Tkinter safe for headless CI (e.g., GitHub Actions)
+# GLOBAL FIX: make Tkinter safe for headless CI (GitHub Actions, etc.)
 # ---------------------------------------------------------------------------
 try:
     root = tk.Tk()
@@ -32,35 +33,29 @@ except tk.TclError:
         def geometry(self, *a, **kw): pass
         def __getattr__(self, name):
             return MagicMock()
-
     dummy_root = DummyTk()
     tk.Tk = lambda *a, **kw: dummy_root
     tk._default_root = dummy_root
 
 
 # ---------------------------------------------------------------------------
-# FIXTURE: create a version-agnostic FitnessTrackerApp instance
+# FIXTURE: version-safe FitnessTrackerApp instance
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def fitness_app(monkeypatch, request):
     """
-    Fixture to initialize a FitnessTrackerApp instance that works
-    across all module versions (ACEest_Fitness, ACEest_Fitness_V1_x, etc.).
-
-    Automatically:
-      - Mocks messagebox dialogs (no GUI popups)
-      - Provides safe Tk root
-      - Resolves correct module name based on test path
+    Creates a FitnessTrackerApp instance that works for any version (ACEest_Fitness, ACEest_Fitness_V1_x, etc.)
+    and ensures no Tkinter or messagebox popups appear during CI.
     """
 
-    # Step 1: Safe Tk root
+    # Step 1. Safe root
     try:
         root = tk.Tk()
         root.withdraw()
     except Exception:
-        root = tk.Tk()
+        root = tk.Tk()  # DummyTk in headless mode
 
-    # Step 2: Detect correct version of ACEest_Fitness module
+    # Step 2. Detect correct module (handles versioned dirs)
     test_path = request.fspath.strpath
     module_name = "ACEest_Fitness"
     match = re.search(r"ACEest_Fitness(?:_V[\d_]+)?", test_path)
@@ -72,25 +67,32 @@ def fitness_app(monkeypatch, request):
     module = importlib.import_module(module_name)
     app_class = getattr(module, "FitnessTrackerApp")
 
-    # Step 3: Mock messagebox dialogs (avoid real popups)
+    # Step 3. Mock messagebox dialogs (prevent popups)
     monkeypatch.setattr("tkinter.messagebox.showinfo", MagicMock())
     monkeypatch.setattr("tkinter.messagebox.showerror", MagicMock())
     monkeypatch.setattr("tkinter.messagebox.askyesno", MagicMock(return_value=True))
 
-    # Step 4: Initialize app
+    # Step 4. Create app instance
     app = app_class(root)
 
-    # Step 5: Ensure Entry.get() behaves normally even if Entry is mocked
-    for widget in ("entry_workout", "entry_duration"):
-        if hasattr(app, widget):
-            entry = getattr(app, widget)
-            if isinstance(entry, MagicMock):
-                # Ensure .get() returns "" by default (like a real empty Entry)
-                entry.get = MagicMock(return_value="")
+    # Step 5. Fix Entry widgets: ensure .get() always returns plain strings
+    def make_safe_entry(entry_widget):
+        """Ensure entry.get() always returns a string, never a MagicMock."""
+        if hasattr(entry_widget, "get"):
+            original_get = entry_widget.get
+            if isinstance(original_get, MagicMock):
+                entry_widget.get = lambda: ""
+        else:
+            # In case Tk is mocked, add a safe get() fallback
+            entry_widget.get = lambda: ""
+
+    for widget_name in ("entry_workout", "entry_duration"):
+        if hasattr(app, widget_name):
+            make_safe_entry(getattr(app, widget_name))
 
     yield app
 
-    # Step 6: Cleanup
+    # Step 6. Cleanup
     try:
         root.destroy()
     except Exception:
