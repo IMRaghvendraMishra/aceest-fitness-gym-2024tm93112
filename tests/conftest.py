@@ -1,11 +1,9 @@
-# tests/conftest.py
 """
 Common pytest configuration and fixtures for the ACEest Fitness project.
 
-This configuration ensures:
-1. Tkinter works safely in both local (GUI) and CI (headless) environments.
-2. All versioned FitnessTrackerApp modules can be tested using one fixture.
-3. Message boxes and UI interactions are fully mocked (no popups, no hangs).
+This setup ensures:
+1. Tkinter runs safely in both local (GUI) and CI (headless) environments.
+2. FitnessTrackerApp can be instantiated in tests without GUI popups or crashes.
 """
 
 import pytest
@@ -16,16 +14,14 @@ import re
 
 
 # ---------------------------------------------------------------------------
-# GLOBAL FIX: make Tkinter safe for headless GitHub Actions or CI runs
+# GLOBAL FIX: make Tkinter safe for headless CI (e.g., GitHub Actions)
 # ---------------------------------------------------------------------------
 try:
-    # Local setup (macOS / Windows): create and hide a real Tk root
     root = tk.Tk()
     root.withdraw()
     tk._default_root = root
     root.destroy()
 except tk.TclError:
-    # Headless CI: use dummy replacements that won't trigger TclError
     class DummyTk:
         def withdraw(self): pass
         def destroy(self): pass
@@ -34,7 +30,7 @@ except tk.TclError:
         def update(self): pass
         def title(self, *a, **kw): pass
         def geometry(self, *a, **kw): pass
-        def __getattr__(self, name):  # Handle any other call gracefully
+        def __getattr__(self, name):
             return MagicMock()
 
     dummy_root = DummyTk()
@@ -48,21 +44,23 @@ except tk.TclError:
 @pytest.fixture
 def fitness_app(monkeypatch, request):
     """
-    Fixture to initialize a FitnessTrackerApp instance that works across
-    all versioned modules (ACEest_Fitness, ACEest_Fitness_V1_x, etc.)
+    Fixture to initialize a FitnessTrackerApp instance that works
+    across all module versions (ACEest_Fitness, ACEest_Fitness_V1_x, etc.).
 
-    It safely mocks Tkinter dialogs and Entry widgets so tests can run
-    without a graphical display or user input.
+    Automatically:
+      - Mocks messagebox dialogs (no GUI popups)
+      - Provides safe Tk root
+      - Resolves correct module name based on test path
     """
 
-    # Step 1: Create a safe Tk root
+    # Step 1: Safe Tk root
     try:
         root = tk.Tk()
         root.withdraw()
     except Exception:
-        root = tk.Tk()  # will be DummyTk in headless mode
+        root = tk.Tk()
 
-    # Step 2: Auto-detect the correct ACEest_Fitness module version
+    # Step 2: Detect correct version of ACEest_Fitness module
     test_path = request.fspath.strpath
     module_name = "ACEest_Fitness"
     match = re.search(r"ACEest_Fitness(?:_V[\d_]+)?", test_path)
@@ -74,35 +72,25 @@ def fitness_app(monkeypatch, request):
     module = importlib.import_module(module_name)
     app_class = getattr(module, "FitnessTrackerApp")
 
-    # Step 3: Mock messagebox dialogs (no popups during test)
-    mock_info = MagicMock()
-    mock_error = MagicMock()
-    mock_yesno = MagicMock(return_value=True)
+    # Step 3: Mock messagebox dialogs (avoid real popups)
+    monkeypatch.setattr("tkinter.messagebox.showinfo", MagicMock())
+    monkeypatch.setattr("tkinter.messagebox.showerror", MagicMock())
+    monkeypatch.setattr("tkinter.messagebox.askyesno", MagicMock(return_value=True))
 
-    monkeypatch.setattr("tkinter.messagebox.showinfo", mock_info)
-    monkeypatch.setattr("tkinter.messagebox.showerror", mock_error)
-    monkeypatch.setattr("tkinter.messagebox.askyesno", mock_yesno)
-
-    # Step 4: Patch tk.Entry.get() to return realistic strings in CI
-    # Prevents "<MagicMock>" appearing in success messages
-    def fake_get(self):
-        # Try to guess purpose based on instance name or string repr
-        repr_lower = str(self).lower()
-        if "workout" in repr_lower:
-            return "Cycling"
-        if "duration" in repr_lower:
-            return "45"
-        return ""
-
-    monkeypatch.setattr("tkinter.Entry.get", fake_get)
-
-    # Step 5: Create the app instance
+    # Step 4: Initialize app
     app = app_class(root)
 
-    # Yield the app to tests
+    # Step 5: Ensure Entry.get() behaves normally even if Entry is mocked
+    for widget in ("entry_workout", "entry_duration"):
+        if hasattr(app, widget):
+            entry = getattr(app, widget)
+            if isinstance(entry, MagicMock):
+                # Ensure .get() returns "" by default (like a real empty Entry)
+                entry.get = MagicMock(return_value="")
+
     yield app
 
-    # Step 6: Cleanup after each test
+    # Step 6: Cleanup
     try:
         root.destroy()
     except Exception:
